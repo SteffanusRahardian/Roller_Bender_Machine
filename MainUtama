@@ -1,0 +1,105 @@
+//Kode Main atau INO_Roller Bender
+#include "MenuLCDdanKeypad.h"
+#include "ProgramMotor.h"
+
+bool kalibrasiAwal = false;         // Flag untuk mendeteksi akhir kalibrasi awal
+bool programBerjalan = false;
+
+//========================================================================
+void setup() {
+  Serial.begin(9600);
+  motor_init();                   // inisialisasi pin motor 
+  PID_init();                     // inisialisasi PID pada motor
+  encoder_init();                 //inisialisasi pembacaan encoder motor
+
+//=======================================================================
+//========================      Kalibrasi Awal        ===================
+//=======================================================================
+  // Tampilkan pesan kalibrasi di LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Proses Kalibrasi...");
+  lcd.setCursor(0, 1);
+  lcd.print("Tunggu sebentar");
+  Serial.println("Proses kalibrasi");
+
+  while (!kalibrasiAwal) {                    // Loop hingga kalibrasi selesai
+    int limitState = digitalRead(LimitVer);   // Baca status limit switch
+    delay(300);
+    Serial.print("Limit switch status: ");    
+    Serial.println(limitState);              
+
+    if (limitState == HIGH) {
+      motorVer(30, 0);                    // Motor terus bergerak jika limit switch belum terdeteksi
+    }else{
+      // Hentikan motor jika limit switch sudah terdeteksi
+      motorVer(0, 0);                    // Motor berhenti
+      posEncoder = 0;                    // Set posisi motor ke 0 (kalibrasi selesai)
+      Serial.println("Kalibrasi Selesai");
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Kalibrasi Selesai!");
+      
+      kalibrasiAwal = true;    // Tandai kalibrasi selesai untuk keluar dari loop
+      delay(1000);                // Beri jeda 1 detik
+    }
+  }
+//==============================================================================
+
+  // Setelah kalibrasi selesai, tampilkan menu
+  displayMenuUtama();                // Inisialisasi menu LCD
+}
+
+//========================================================================
+//========================================================================
+void loop(){
+  readKeypad();
+  
+  if(isBendingModeSelected){
+    readCalibrationMenu();
+
+    //===================================
+    if(isInCalibration){                               //Jika menu "kalibrasi Motor" terpilih
+      Serial.print("Memulai kalibrasi motor...");
+      kalibrasiMotor(kalibrasiValue);
+      lcd.print("Posisi: ");
+      lcd.println(posEncoder);
+      isInCalibration = false;                        //Set false setelah kalibrasi selesaikalibrasiMotor(kalibrasiValue);                
+      lcd.clear();
+      lcd.print("Kalibrasi Selesai.");
+      Serial.print("Kalibrasi Selesai");
+      displayMenuLanjutan();                          //Tampilkan menu lanjutan setelah kalibrasi selesai
+    }
+
+    //=====================================
+    if(isRunningProgram){
+      Serial.println("Program sedang berjalan");
+      lcd.clear();
+      lcd.print("Program berjalan...");
+    
+      int pwmValue = bendingPWM;        //mengambil pwmValue sebagai bendingPWM
+      jalankanProgram(pwmValue);        //Panggil fungsi "jalankanProgram" dengan nilai bendingPWM
+      delay(200);
+
+      isRunningProgram = false;
+      programBerjalan = true;           //Tanda bahwa program sedang berjalan
+    }
+  }
+
+  //Mengecek kondisi motor
+  if(programBerjalan){
+    if(customKey == 'D'){               //Jika tombol D ditekan, maka motor rolling berhenti
+      motorRoll(0,0);
+      programBerjalan = false;          //Tanda bahwa program telah selesai
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Stop ditekan");
+      lcd.setCursor(0,1);
+      lcd.print("Program Selesai.");
+      delay(2000);
+      displayMenuLanjutan();            //Kembali ke menu lanjutan
+    }
+  }
+}
+ 
