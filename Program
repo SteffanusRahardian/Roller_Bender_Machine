@@ -1,0 +1,132 @@
+//Library ProgramMotor.h
+
+/*Urutan pin driver(kanan ke kiri)
+Ground-5V-REN-LEN-RPWM-LPWM*/
+
+#include<PID_v1.h>
+//----------BTS Motor Vertical (Driver 2)----------
+const int REN2  = 2;                  //Enable motor vertikal putar kanan                  
+const int LEN2  = 3;                  //Enable motor vertikal putar kiri
+const int RPWM2 = 4;                  //Mengatur pwm/kec motor putar kanan
+const int LPWM2 = 5;                  //Mengatur pwm/kec motor putar kiri
+const int ENC_Vertikal = 18;          //Pin terhubung Encoder motor Vertikal     
+
+//---------BTS Motor Rolling (Driver 1)-----------
+const int REN1  = 6;                  //Enable motor rolling putar kanan
+const int LEN1  = 7;                  //Enable motor rolling putar kiri
+const int RPWM1 = 8;                  //Mengatur pwm/kec motor putar kanan
+const int LPWM1 = 9;                  //Mengatur pwm/kec motor putar kiri
+
+//Pin Encoder
+volatile float posEncoder = 0;               // Variabel untuk menyimpan posisi motor
+int motorDirection = 0;               // 1 untuk maju, -1 untuk mundur
+int mode = 0;
+
+//Pin Limit Switch
+const int LimitVer = 0;                //Pin limit switch
+
+
+//-----------PID MOTOR VERTIKAL DAN ROLLING---------
+//-------PID Motor Rolling------------
+double Setpoint, Input, Output;
+double consKp = 10; double consKi = 0.1; double consKd = 0;
+PID PIDrolling(&Input, &Output, &Setpoint, consKp, consKi, consKd, DIRECT);
+
+//-------PID Motor Vertikal------------
+double Setpoint2, Input2, Output2;
+double consKp2 = 70; double consKi2 = 0.3; double consKd2 = 0;
+PID PIDvertikal(&Input2, &Output2, &Setpoint2, consKp2, consKi2, consKd2, DIRECT);
+
+//----Fungsi PID Motor-------------
+int maxvroll, stepver;
+void PID_init(){
+  Setpoint = 0;
+  Setpoint2 = 0;
+  PIDrolling.SetOutputLimits(-maxvroll, maxvroll);
+  PIDrolling.SetMode(AUTOMATIC);
+  PIDvertikal.SetOutputLimits(-70,70);
+  PIDvertikal.SetMode(AUTOMATIC);
+}
+
+//============================================================================
+//============================================================================
+// Fungsi yang dipanggil setiap kali sinyal encoder berubah
+unsigned long lastEncoderPrint = 0;
+const unsigned long printInterval = 200;
+
+void readEncoder(){
+  // Posisi berubah sesuai dengan arah motor yang ditentukan
+  posEncoder += motorDirection;
+  
+  if(millis() - lastEncoderPrint >= printInterval){
+    Serial.print("Encoder triggered: "); // Menampilkan pesan saat interrupt dipanggil
+    Serial.println(posEncoder);
+    lastEncoderPrint = millis();
+  }
+}
+
+
+//=======================================================
+void encoder_init(){
+  pinMode(LimitVer, INPUT_PULLUP);       // pin limit switch ke motor vertikal
+  attachInterrupt(digitalPinToInterrupt(ENC_Vertikal), readEncoder, CHANGE);    // Menggunakan interrupt untuk mendeteksi perubahan sinyal encoder
+}
+
+//=======================================================
+void motor_init(){
+  // Inisialisasi pin motor
+ //Pin Output Motor Vertikal
+  pinMode(RPWM2, OUTPUT);
+  pinMode(LPWM2, OUTPUT);
+  pinMode(REN2, OUTPUT);
+  pinMode(LEN2, OUTPUT);
+
+  //Pin Output Motor Rolling
+  pinMode(RPWM1, OUTPUT);
+  pinMode(LPWM1, OUTPUT);
+  pinMode(REN1, OUTPUT);
+  pinMode(LEN1, OUTPUT);
+}
+
+//=============================================================
+//Mengatur Putaran Motor Vertikal
+void motorVer(int rpwm2, int lpwm2){
+  digitalWrite(REN2, HIGH);          //Enable motor maju
+  digitalWrite(LEN2, HIGH);          //Enable motor mundur
+  analogWrite(RPWM2, rpwm2);
+  analogWrite(LPWM2, lpwm2);
+}
+
+//=============================================================
+//Mengatur Putaran Motor Rolling
+void motorRoll(int rpwm1, int lpwm1){
+  digitalWrite(REN1, HIGH);          //Enable motor maju
+  digitalWrite(LEN1, HIGH);          //Enable motor mundur
+  analogWrite(RPWM1, rpwm1);
+  analogWrite(LPWM1, lpwm1);
+}
+
+//=============================================================
+//Kalibrasi motor saat mode bending 
+void kalibrasiMotor(int targetPosEncoder){
+  while(posEncoder > targetPosEncoder){        
+    motorDirection = -1;
+    motorVer(0, 15);  
+    Serial.print("Posisi Encoder: ");
+    Serial.println(posEncoder);
+    // delay(100);      
+  }
+  motorVer(0, 0);
+  posEncoder = targetPosEncoder;               //tampilkan nilai pos ke target yang diinputkan
+  Serial.print("Kalibrasi selesai");
+  Serial.println(posEncoder);
+}
+
+//=============================================================================
+//Fungsi "Jalankan Program" dipilih menggunakan nilai bendingPWM
+void jalankanProgram(int bendingPWM){
+  motorDirection = 1;
+  motorRoll(0, bendingPWM);
+  Serial.print("Motor rolling dijalankan dengan PWM: ");
+  Serial.println(bendingPWM);
+}
